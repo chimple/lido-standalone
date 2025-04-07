@@ -1,6 +1,5 @@
 {
   "name": "lido-standalone",
-  "private": true,
   "version": "0.0.0-alpha-1",
   "description": "Lido standalone",
   "main": "dist/index.cjs.js",
