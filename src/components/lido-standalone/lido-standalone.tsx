@@ -166,7 +166,8 @@ export class LidoStandalone {
     // If xmlPath is not explicitly provided, default to `index.xml` in baseUrl
     if (!this.xmlPath) {
       if (this.baseUrl) {
-        this.xmlPath = `${this.baseUrl}/index.xml`;
+        const cleanBase = this.baseUrl.replace(/\/+$/, '');
+        this.xmlPath = `${cleanBase}/index.xml`;
         this.xmlBaseUrl = this.baseUrl;
       } else {
         return;
