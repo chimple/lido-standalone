@@ -52,6 +52,8 @@ export class LidoStandalone {
    */
   @Prop() xmlData?: string;
 
+  @Prop() codeFolderPath?: string;
+
   /** Whether scripts are already injected (remote or fallback). */
   @State() scriptsInjected: boolean = false;
 
@@ -80,7 +82,7 @@ export class LidoStandalone {
     this.fetchXmlData();
   }
 
-  private injectLidoScripts() {
+  private async injectLidoScripts() {
     console.log('injectLidoScripts() called. baseUrl=', this.baseUrl);
 
     // If no baseUrl is provided OR we already injected scripts, just go to fallback
@@ -113,7 +115,66 @@ export class LidoStandalone {
 
       this.scriptsInjected = true;
       console.debug('Lido scripts injected from:', this.baseUrl);
-    } else {
+    }
+
+    else if (this.codeFolderPath) {
+      const cleanBase = this.baseUrl.replace(/\/+$/, "");
+      const cfgUrl = `${cleanBase}/config.json`;
+
+      try {
+        // Load config.json ---
+        const res = await fetch(cfgUrl);
+
+        if (!res.ok) {
+          console.warn("config.json not found at:", cfgUrl);
+          return;
+        }
+
+        const cfg = await res.json();
+        const version = cfg.codeVersion;
+
+        if (!version) {
+          console.warn("config.json missing codeVersion");
+          return;
+        }
+
+        // --- Build version folder path ---
+        const codePath = this.codeFolderPath.replace(/\/+$/, "");
+        const versionFolder = `${codePath}/${version}`;
+
+        const esmUrl = `${versionFolder}/lido-player.esm.js`;
+        const noModuleUrl = `${versionFolder}/lido-player.js`;
+
+        // --- Check if ESM file exists ---
+        const headCheck = await fetch(esmUrl, { method: "HEAD" });
+        if (!headCheck.ok) {
+          console.warn(`Version folder found but lido-player.esm.js missing: ${esmUrl}`);
+          return;
+        }
+
+        // --- Inject module script ---
+        const scriptEsm = document.createElement("script");
+        scriptEsm.type = "module";
+        scriptEsm.src = esmUrl;
+        document.head.appendChild(scriptEsm);
+
+        // --- Inject nomodule fallback ---
+        const scriptNoModule = document.createElement("script");
+        scriptNoModule.setAttribute("nomodule", "");
+        scriptNoModule.src = noModuleUrl;
+        document.head.appendChild(scriptNoModule);
+
+        this.scriptsInjected = true;
+        console.debug("Loaded version from config.json:", versionFolder);
+        return;
+
+      } catch (e) {
+        console.error("Failed to read config.json for versioning:", e);
+      }
+    }
+
+
+    else {
       // Otherwise, fallback to the npm package
       console.warn(`Could not find remote scripts at "${scriptCheckUrl}". Falling back to npm package "lido-player"...`);
       this.fallbackNpmImport();
@@ -201,6 +262,10 @@ export class LidoStandalone {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl}></lido-home>;
+    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
   }
+
+  
 }
+
+
