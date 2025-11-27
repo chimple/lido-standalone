@@ -52,6 +52,13 @@ export class LidoStandalone {
    */
   @Prop() xmlData?: string;
 
+  /**
+    * If provided(in index.html) → tries versioned script loading from config.json.
+    * If no version is found → automatically falls back to default player loading.
+    * If not provided → version management is skipped entirely and falls back to default player loading.
+   */
+  @Prop() codeFolderPath?: string;
+
   /** Whether scripts are already injected (remote or fallback). */
   @State() scriptsInjected: boolean = false;
 
@@ -80,7 +87,7 @@ export class LidoStandalone {
     this.fetchXmlData();
   }
 
-  private injectLidoScripts() {
+  private async injectLidoScripts() {
     console.log('injectLidoScripts() called. baseUrl=', this.baseUrl);
 
     // If no baseUrl is provided OR we already injected scripts, just go to fallback
@@ -113,7 +120,65 @@ export class LidoStandalone {
 
       this.scriptsInjected = true;
       console.debug('Lido scripts injected from:', this.baseUrl);
-    } else {
+    }
+
+    else if (this.codeFolderPath) {
+      const cleanBase = this.baseUrl.replace(/\/+$/, "");
+      const cfgUrl = `${cleanBase}/config.json`;
+
+      try {
+          const res = await fetch(cfgUrl);
+
+          if (!res.ok) {
+              console.warn("config.json not found. Skipping versioning and continuing...");
+              throw new Error("config.json fetch failed");
+          } 
+          else {
+              const cfg = await res.json();
+              const version = cfg.codeVersion;
+
+              if (!version) {
+                  console.warn("config.json missing codeVersion. Skipping versioning. Falling back to npm package lido-player...");
+                  throw new Error("codeVersion missing in config.json");
+              } else {
+                  // --- Version exists: try to load versioned folder ---
+                  const codePath = this.codeFolderPath.replace(/\/+$/, "");
+                  const versionFolder = `${codePath}/${version}`;
+
+                  const esmUrl = `${versionFolder}/lido-player.esm.js`;
+                  const noModuleUrl = `${versionFolder}/lido-player.js`;
+
+                  // Check if versioned ESM exists
+                  const headCheck = await fetch(esmUrl, { method: "HEAD" });
+
+                  if (!headCheck.ok) {
+                      console.warn(`Version folder found but lido-player.esm.js missing: ${esmUrl}`);
+                  } else {
+                      // --- Load versioned scripts (SUCCESS CASE) ---
+                      const scriptEsm = document.createElement("script");
+                      scriptEsm.type = "module";
+                      scriptEsm.src = esmUrl;
+                      document.head.appendChild(scriptEsm);
+
+                      const scriptNoModule = document.createElement("script");
+                      scriptNoModule.setAttribute("nomodule", "");
+                      scriptNoModule.src = noModuleUrl;
+                      document.head.appendChild(scriptNoModule);
+
+                      this.scriptsInjected = true;
+                      console.debug("Loaded version from config.json:", versionFolder);
+                      return; // return when version successfully loaded
+                  }
+              }
+          }
+        } catch (e) {
+            console.error("Failed to read config.json. Skipping versioning...", e);
+            this.fallbackNpmImport();
+        }
+      // If we reach this point, version loading FAILED → continue to final else
+    }
+
+    else {
       // Otherwise, fallback to the npm package
       console.warn(`Could not find remote scripts at "${scriptCheckUrl}". Falling back to npm package "lido-player"...`);
       this.fallbackNpmImport();
@@ -201,6 +266,10 @@ export class LidoStandalone {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl}></lido-home>;
+    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
   }
+
+  
 }
+
+
