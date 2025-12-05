@@ -105,7 +105,149 @@ export class LidoStandalone {
     const scriptCheckUrl = `${cleanBase}/code/lido-player.esm.js`;
     const fileExists = this.doesFileExistSync(scriptCheckUrl);
 
-    if (fileExists) {
+    // --------------- CASE: NO codeFolderPath PROVIDED ---------------
+    // Try loading version from default /code_versions folder
+    if (!this.codeFolderPath) {
+      try {
+        const cleanBase = this.baseUrl.replace(/\/+$/, "");
+
+        // 1️⃣ Look for config.json inside default code_versions folder
+        const defaultCodeConfigUrl = `${cleanBase}/code_versions/config.json`;
+        const codeResp = await fetch(defaultCodeConfigUrl);
+
+        if (!codeResp.ok) throw new Error("default code_versions/config.json missing");
+
+        const codeCfg = await codeResp.json();
+        const versions: string[] = codeCfg.versions || [];
+
+        if (!versions.length) throw new Error("No versions found in code_versions");
+
+        // 2️⃣ Take latest version (last in array)
+        const latestVersion = versions[versions.length - 1];
+
+        // 3️⃣ Build script URLs
+        const versionDir = `${cleanBase}/code_versions/${latestVersion}`;
+        const esmUrl = `${versionDir}/lido-player.esm.js`;
+        const noModuleUrl = `${versionDir}/lido-player.js`;
+
+        // 4️⃣ Confirm esm file exists
+        const headCheck = await fetch(esmUrl, { method: "HEAD" });
+        if (!headCheck.ok) throw new Error(`Versioned script missing: ${esmUrl}`);
+
+        // 5️⃣ Inject versioned scripts
+        const scriptEsm = document.createElement("script");
+        scriptEsm.type = "module";
+        scriptEsm.src = esmUrl;
+        document.head.appendChild(scriptEsm);
+
+        const scriptNoModule = document.createElement("script");
+        scriptNoModule.setAttribute("nomodule", "");
+        scriptNoModule.src = noModuleUrl;
+        document.head.appendChild(scriptNoModule);
+
+        this.scriptsInjected = true;
+        console.debug("Loaded latest version from:", versionDir);
+      } 
+      catch (err) {
+        console.warn("Failed to load default versioned scripts, falling back to npm:", err);
+        this.fallbackNpmImport();
+      }
+    }
+
+
+    // --------------- CASE: codeFolderPath PROVIDED ---------------
+    else if (this.codeFolderPath) {
+      const cleanBase = this.baseUrl.replace(/\/+$/, "");
+      const lessonCfgUrl = `${cleanBase}/config.json`;
+
+      try {
+        // 1️⃣ Load lesson config.json safely
+        let lessonCfg: any = {};
+        let lessonVersion: string | null = null;
+
+        try {
+          const lessonResp = await fetch(lessonCfgUrl);
+          if (!lessonResp.ok) throw new Error("Lesson config.json missing");
+
+          // Check for empty file (0 bytes)
+          const text = await lessonResp.text();
+          if (text.trim().length > 0) {
+            lessonCfg = JSON.parse(text);
+          } else {
+            console.warn("Lesson config.json is EMPTY → falling back to latest version");
+          }
+
+          lessonVersion = lessonCfg.codeVersion;
+        } catch (parseErr) {
+          console.warn("Lesson config.json invalid or unreadable → fallback to latest version");
+          lessonVersion = null;
+        }
+
+        // Normalize invalid versions
+        if (!lessonVersion || typeof lessonVersion !== "string" || lessonVersion.trim() === "") {
+          console.warn("Lesson has NO valid codeVersion → using latest version in code-folder-path");
+          lessonVersion = null;
+        }
+
+        // 2️⃣ Load version list from code-folder-path/config.json
+        const codeCfgUrl = `${this.codeFolderPath.replace(/\/+$/, '')}/config.json`;
+        const codeResp = await fetch(codeCfgUrl);
+        if (!codeResp.ok) throw new Error("Code-folder config.json missing");
+
+        const codeCfg = await codeResp.json();
+        const availableVersions: string[] = codeCfg.versions || [];
+
+        if (!availableVersions.length) {
+          throw new Error("No versions listed in code-folder config.json");
+        }
+
+        // 3️⃣ Compute selected version
+        let selectedVersion: string | undefined = null;
+
+        if (lessonVersion) {
+          selectedVersion = availableVersions.find(v => v.includes(lessonVersion));
+        }
+
+        // Fallback: use latest version
+        if (!selectedVersion) {
+          selectedVersion = availableVersions[availableVersions.length - 1];
+          console.warn(`Using latest available version: ${selectedVersion}`);
+        }
+
+        // 4️⃣ Inject scripts
+        const versionDir = `${this.codeFolderPath}/${selectedVersion}`;
+        const esmUrl = `${versionDir}/lido-player.esm.js`;
+        const noModuleUrl = `${versionDir}/lido-player.js`;
+
+        // Check if version folder exists
+        const headCheck = await fetch(esmUrl, { method: "HEAD" });
+        if (!headCheck.ok) throw new Error(`Versioned script missing: ${esmUrl}`);
+
+        // Inject main module file
+        const scriptEsm = document.createElement("script");
+        scriptEsm.type = "module";
+        scriptEsm.src = esmUrl;
+        document.head.appendChild(scriptEsm);
+
+        // Inject fallback nomodule script
+        const scriptNoModule = document.createElement("script");
+        scriptNoModule.setAttribute("nomodule", "");
+        scriptNoModule.src = noModuleUrl;
+        document.head.appendChild(scriptNoModule);
+
+        this.scriptsInjected = true;
+        console.debug("Loaded Lido version from:", versionDir);
+
+      } catch (err) {
+        console.warn("Failed to load versioned scripts, falling back to npm:", err);
+        this.fallbackNpmImport();
+      }
+    }
+
+
+
+    else {
+      if (fileExists) {
       // If it exists, inject them
       const scriptEsm = document.createElement('script');
       scriptEsm.type = 'module';
@@ -121,67 +263,11 @@ export class LidoStandalone {
       this.scriptsInjected = true;
       console.debug('Lido scripts injected from:', this.baseUrl);
     }
-
-    else if (this.codeFolderPath) {
-      const cleanBase = this.baseUrl.replace(/\/+$/, "");
-      const cfgUrl = `${cleanBase}/config.json`;
-
-      try {
-          const res = await fetch(cfgUrl);
-
-          if (!res.ok) {
-              console.warn("config.json not found. Skipping versioning and continuing...");
-              throw new Error("config.json fetch failed");
-          } 
-          else {
-              const cfg = await res.json();
-              const version = cfg.codeVersion;
-
-              if (!version) {
-                  console.warn("config.json missing codeVersion. Skipping versioning. Falling back to npm package lido-player...");
-                  throw new Error("codeVersion missing in config.json");
-              } else {
-                  // --- Version exists: try to load versioned folder ---
-                  const codePath = this.codeFolderPath.replace(/\/+$/, "");
-                  const versionFolder = `${codePath}/${version}`;
-
-                  const esmUrl = `${versionFolder}/lido-player.esm.js`;
-                  const noModuleUrl = `${versionFolder}/lido-player.js`;
-
-                  // Check if versioned ESM exists
-                  const headCheck = await fetch(esmUrl, { method: "HEAD" });
-
-                  if (!headCheck.ok) {
-                      console.warn(`Version folder found but lido-player.esm.js missing: ${esmUrl}`);
-                  } else {
-                      // --- Load versioned scripts (SUCCESS CASE) ---
-                      const scriptEsm = document.createElement("script");
-                      scriptEsm.type = "module";
-                      scriptEsm.src = esmUrl;
-                      document.head.appendChild(scriptEsm);
-
-                      const scriptNoModule = document.createElement("script");
-                      scriptNoModule.setAttribute("nomodule", "");
-                      scriptNoModule.src = noModuleUrl;
-                      document.head.appendChild(scriptNoModule);
-
-                      this.scriptsInjected = true;
-                      console.debug("Loaded version from config.json:", versionFolder);
-                      return; // return when version successfully loaded
-                  }
-              }
-          }
-        } catch (e) {
-            console.error("Failed to read config.json. Skipping versioning...", e);
-            this.fallbackNpmImport();
-        }
-      // If we reach this point, version loading FAILED → continue to final else
-    }
-
-    else {
-      // Otherwise, fallback to the npm package
+      else{
+        // Otherwise, fallback to the npm package
       console.warn(`Could not find remote scripts at "${scriptCheckUrl}". Falling back to npm package "lido-player"...`);
       this.fallbackNpmImport();
+      }
     }
   }
 
