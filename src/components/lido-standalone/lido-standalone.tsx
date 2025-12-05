@@ -112,7 +112,7 @@ export class LidoStandalone {
         const cleanBase = this.baseUrl.replace(/\/+$/, "");
 
         // 1️⃣ Look for config.json inside default code_versions folder
-        const defaultCodeConfigUrl = `${cleanBase}/code_versions/config.json`;
+        const defaultCodeConfigUrl = `${cleanBase}/config.json`;
         const codeResp = await fetch(defaultCodeConfigUrl);
 
         if (!codeResp.ok) throw new Error("default code_versions/config.json missing");
