@@ -177,7 +177,7 @@ export class LidoStandalone {
             console.warn("Lesson config.json is EMPTY → falling back to latest version");
           }
 
-          lessonVersion = lessonCfg.codeVersion;
+          lessonVersion = lessonCfg.code_version;
         } catch (parseErr) {
           console.warn("Lesson config.json invalid or unreadable → fallback to latest version");
           lessonVersion = null;
