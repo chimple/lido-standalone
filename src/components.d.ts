@@ -29,6 +29,10 @@ export namespace Components {
          */
         "canplay": boolean;
         /**
+          * If provided(in index.html) → tries versioned script loading from config.json. If no version is found → automatically falls back to default player loading. If not provided → version management is skipped entirely and falls back to default player loading.
+         */
+        "codeFolderPath"?: string;
+        /**
           * The height prop to pass to <lido-home>. Defaults to "75vh".
          */
         "height": string;
@@ -93,6 +97,10 @@ declare namespace LocalJSX {
           * Whether the <lido-home> can play. Defaults to false.
          */
         "canplay"?: boolean;
+        /**
+          * If provided(in index.html) → tries versioned script loading from config.json. If no version is found → automatically falls back to default player loading. If not provided → version management is skipped entirely and falls back to default player loading.
+         */
+        "codeFolderPath"?: string;
         /**
           * The height prop to pass to <lido-home>. Defaults to "75vh".
          */

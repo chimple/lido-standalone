@@ -52,6 +52,13 @@ export class LidoStandalone {
    */
   @Prop() xmlData?: string;
 
+  /**
+    * If provided(in index.html) → tries versioned script loading from config.json.
+    * If no version is found → automatically falls back to default player loading.
+    * If not provided → version management is skipped entirely and falls back to default player loading.
+   */
+  @Prop() codeFolderPath?: string;
+
   /** Whether scripts are already injected (remote or fallback). */
   @State() scriptsInjected: boolean = false;
 
@@ -80,7 +87,7 @@ export class LidoStandalone {
     this.fetchXmlData();
   }
 
-  private injectLidoScripts() {
+  private async injectLidoScripts() {
     console.log('injectLidoScripts() called. baseUrl=', this.baseUrl);
 
     // If no baseUrl is provided OR we already injected scripts, just go to fallback
@@ -98,44 +105,152 @@ export class LidoStandalone {
     const scriptCheckUrl = `${cleanBase}/code/lido-player.esm.js`;
     const fileExists = this.doesFileExistSync(scriptCheckUrl);
 
+    // --------------- CASE: NO codeFolderPath PROVIDED ---------------
+    // Try loading version from default /code_versions folder
+    // --------------- SINGLE CASE: codeFolderPath PROVIDED ---------------
+
     if (fileExists) {
+      console.log("Using code from zip....")
       // If it exists, inject them
       const scriptEsm = document.createElement('script');
       scriptEsm.type = 'module';
       scriptEsm.src = scriptCheckUrl;
       document.head.appendChild(scriptEsm);
-
       // (Optional) NoModule script for older browsers
       const scriptNoModule = document.createElement('script');
       scriptNoModule.setAttribute('nomodule', '');
       scriptNoModule.src = `${cleanBase}/code/lido-player.js`;
       document.head.appendChild(scriptNoModule);
-
       this.scriptsInjected = true;
       console.debug('Lido scripts injected from:', this.baseUrl);
-    } else {
-      // Otherwise, fallback to the npm package
-      console.warn(`Could not find remote scripts at "${scriptCheckUrl}". Falling back to npm package "lido-player"...`);
+      return;
+    }
+    
+    if (this.codeFolderPath) {
+    const cleanBase = this.baseUrl.replace(/\/+$/, "");
+    try {
+      const lessonCfgUrl = `${cleanBase}/config.json`;
+      try {
+          // 1️⃣ Load lesson config.json safely
+          let lessonCfg: any = {};
+          let lessonVersion: string | null = null;
+
+          try {
+            const lessonResp = await fetch(lessonCfgUrl);
+            if (!lessonResp.ok) throw new Error("Lesson config.json missing");
+
+            // Check for empty file (0 bytes)
+            const text = await lessonResp.text();
+            if (text.trim().length > 0) {
+              lessonCfg = JSON.parse(text);
+            } else {
+              console.warn("Lesson config.json is EMPTY → falling back to latest version");
+            }
+
+            lessonVersion = lessonCfg.code_version;
+            console.log(`%c USING THE VERSION FOLDER--> ${lessonVersion} `,"color: #3bffe8ff; background:#d32f2f; font-size: 15px; font-weight: bold; padding: 6px 10px; border-radius: 4px;");
+
+          } catch (parseErr) {
+            console.warn("Lesson config.json invalid or unreadable → fallback to latest version");
+            lessonVersion = null;
+          }
+
+          // Normalize invalid versions
+          if (!lessonVersion || typeof lessonVersion !== "string" || lessonVersion.trim() === "") {
+            console.warn("Lesson has NO valid codeVersion → using latest version in code-folder-path");
+            lessonVersion = null;
+          }
+
+          // 2️⃣ Load version list from code-folder-path/config.json
+          const codeCfgUrl = `${this.codeFolderPath.replace(/\/+$/, '')}/config.json`;
+          const codeResp = await fetch(codeCfgUrl);
+          if (!codeResp.ok) throw new Error("Code-folder config.json missing");
+
+          const codeCfg = await codeResp.json();
+          const availableVersions: string[] = codeCfg.versions || [];
+
+          if (!availableVersions.length) {
+            throw new Error("No versions listed in code-folder config.json");
+          }
+
+          // 3️⃣ Compute selected version
+          let selectedVersion: string | undefined = null;
+
+          if (lessonVersion) {
+            selectedVersion = availableVersions.find(v => v.includes(lessonVersion));
+          }
+
+          // Fallback: use latest version
+          if (!selectedVersion) {
+            selectedVersion = availableVersions[availableVersions.length - 1];
+            console.log(`%c USING THE LATEST VERSION FOLDER-> ${selectedVersion} `,"color: #3bffe8ff; background:#d32f2f; font-size: 15px; font-weight: bold; padding: 6px 10px; border-radius: 4px;");
+          }
+
+          // 4️⃣ Inject scripts
+          const versionDir = `${this.codeFolderPath}/${selectedVersion}`;
+          const esmUrl = `${versionDir}/lido-player.esm.js`;
+          const noModuleUrl = `${versionDir}/lido-player.js`;
+
+          // Check if version folder exists
+          const headCheck = await fetch(esmUrl, { method: "HEAD" });
+          if (!headCheck.ok) throw new Error(`Versioned script missing: ${esmUrl}`);
+
+          // Inject main module file
+          const scriptEsm = document.createElement("script");
+          scriptEsm.type = "module";
+          scriptEsm.src = esmUrl;
+          document.head.appendChild(scriptEsm);
+
+          // Inject fallback nomodule script
+          const scriptNoModule = document.createElement("script");
+          scriptNoModule.setAttribute("nomodule", "");
+          scriptNoModule.src = noModuleUrl;
+          document.head.appendChild(scriptNoModule);
+
+          this.scriptsInjected = true;
+          console.debug("Loaded Lido version from:", versionDir);
+
+        }catch (err) {
+          console.warn("Failed to load versioned scripts, falling back to npm:", err);
+          this.fallbackNpmImport();
+        } 
+    } catch (err) {
+      console.warn("Failed loading scripts → fallback to npm:", err);
       this.fallbackNpmImport();
     }
+    return;
+  }
+    this.fallbackNpmImport();
   }
 
-  /**
-   * Synchronously checks if a file exists via HTTP HEAD request.
-   * Returns true if status is 2xx, false otherwise.
-   */
-  private doesFileExistSync(url: string): boolean {
-    let exists = false;
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('HEAD', url, false); // false = synchronous
-      xhr.send(null);
-      exists = xhr.status >= 200 && xhr.status < 300;
-    } catch (err) {
-      console.warn('Synchronous HEAD request failed for:', url, err);
-    }
-    return exists;
+ /**
+ * Checks if a file truly exists (not a dev-server fallback).
+ * Ensures:
+ *  - HTTP HEAD returns 2xx
+ *  - responseURL matches the requested URL
+ */
+private doesFileExistSync(url: string): boolean {
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open("HEAD", url, false); // synchronous
+    xhr.send();
+
+    const statusOk = xhr.status >= 200 && xhr.status < 300;
+
+    if (!statusOk) return false;
+
+    // Detect fallback HTML responses (common when folder/file is missing)
+    const contentType = xhr.getResponseHeader("Content-Type") || "";
+
+    const isHtmlFallback = contentType.includes("text/html");
+
+    return !isHtmlFallback;
+  } catch (err) {
+    console.warn("File existence check failed for:", url, err);
+    return false;
   }
+}
+
 
   /**
    * Fallback approach: dynamically import the "lido-player/loader" module,
@@ -201,6 +316,10 @@ export class LidoStandalone {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl}></lido-home>;
+    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
   }
+
+  
 }
+
+
