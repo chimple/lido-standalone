@@ -108,36 +108,27 @@ export class LidoStandalone {
     // --------------- CASE: NO codeFolderPath PROVIDED ---------------
     // Try loading version from default /code_versions folder
     // --------------- SINGLE CASE: codeFolderPath PROVIDED ---------------
-  if (fileExists && this.codeFolderPath) {
+
+    if (fileExists) {
+      console.log("Using code form zip....")
+      // If it exists, inject them
+      const scriptEsm = document.createElement('script');
+      scriptEsm.type = 'module';
+      scriptEsm.src = scriptCheckUrl;
+      document.head.appendChild(scriptEsm);
+      // (Optional) NoModule script for older browsers
+      const scriptNoModule = document.createElement('script');
+      scriptNoModule.setAttribute('nomodule', '');
+      scriptNoModule.src = `${cleanBase}/code/lido-player.js`;
+      document.head.appendChild(scriptNoModule);
+      this.scriptsInjected = true;
+      console.debug('Lido scripts injected from:', this.baseUrl);
+      return;
+    }
+    
+    if (this.codeFolderPath) {
     const cleanBase = this.baseUrl.replace(/\/+$/, "");
     try {
-      // -------------------------------------------------------------
-      // 1️⃣ CHECK IF ZIP ALREADY CONTAINS /code/ folder
-      // -------------------------------------------------------------
-      const codeTestUrl = `${cleanBase}/code/lido-player.esm.js`;
-      const codeResp = await fetch(codeTestUrl, { method: "HEAD" });
-      const contentType = codeResp.headers.get("content-type") || "";
-
-      const codeFolderExists = codeResp.ok && contentType.includes("javascript"); // OR application/x-javascript
-
-      if (codeFolderExists) {
-        console.log("%c USING THE CODE FOLDER... ","color: #3bffe8ff; background:#d32f2f; font-size: 15px; font-weight: bold; padding: 6px 10px; border-radius: 4px;");
-
-        console.debug("Lesson ZIP already contains /code → Using embedded code folder");
-
-        const scriptEsm = document.createElement("script");
-        scriptEsm.type = "module";
-        scriptEsm.src = codeTestUrl;
-        document.head.appendChild(scriptEsm);
-
-        const scriptNoModule = document.createElement("script");
-        scriptNoModule.setAttribute("nomodule", "");
-        scriptNoModule.src = `${cleanBase}/code/lido-player.js`;
-        document.head.appendChild(scriptNoModule);
-
-        this.scriptsInjected = true;
-        return;
-      }
       const lessonCfgUrl = `${cleanBase}/config.json`;
       try {
           // 1️⃣ Load lesson config.json safely
@@ -227,31 +218,39 @@ export class LidoStandalone {
       console.warn("Failed loading scripts → fallback to npm:", err);
       this.fallbackNpmImport();
     }
+    return;
+  }
+    this.fallbackNpmImport();
   }
 
-  else{
-        // Otherwise, fallback to the npm package
-      console.warn(`Could not find remote scripts at "${scriptCheckUrl}". Falling back to npm package "lido-player"...`);
-      this.fallbackNpmImport();
-      }
-  }
+ /**
+ * Checks if a file truly exists (not a dev-server fallback).
+ * Ensures:
+ *  - HTTP HEAD returns 2xx
+ *  - responseURL matches the requested URL
+ */
+private doesFileExistSync(url: string): boolean {
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open("HEAD", url, false); // synchronous
+    xhr.send();
 
-  /**
-   * Synchronously checks if a file exists via HTTP HEAD request.
-   * Returns true if status is 2xx, false otherwise.
-   */
-  private doesFileExistSync(url: string): boolean {
-    let exists = false;
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('HEAD', url, false); // false = synchronous
-      xhr.send(null);
-      exists = xhr.status >= 200 && xhr.status < 300;
-    } catch (err) {
-      console.warn('Synchronous HEAD request failed for:', url, err);
-    }
-    return exists;
+    const statusOk = xhr.status >= 200 && xhr.status < 300;
+
+    if (!statusOk) return false;
+
+    // Detect fallback HTML responses (common when folder/file is missing)
+    const contentType = xhr.getResponseHeader("Content-Type") || "";
+
+    const isHtmlFallback = contentType.includes("text/html");
+
+    return !isHtmlFallback;
+  } catch (err) {
+    console.warn("File existence check failed for:", url, err);
+    return false;
   }
+}
+
 
   /**
    * Fallback approach: dynamically import the "lido-player/loader" module,
