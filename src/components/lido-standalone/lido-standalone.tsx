@@ -110,7 +110,7 @@ export class LidoStandalone {
     // --------------- SINGLE CASE: codeFolderPath PROVIDED ---------------
 
     if (fileExists) {
-      console.log("Using code form zip....")
+      console.log("Using code from zip....")
       // If it exists, inject them
       const scriptEsm = document.createElement('script');
       scriptEsm.type = 'module';
