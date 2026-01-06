@@ -32,6 +32,7 @@ export namespace Components {
           * If provided(in index.html) → tries versioned script loading from config.json. If no version is found → automatically falls back to default player loading. If not provided → version management is skipped entirely and falls back to default player loading.
          */
         "codeFolderPath"?: string;
+        "commonAudioPath"?: string;
         /**
           * The height prop to pass to <lido-home>. Defaults to "75vh".
          */
@@ -101,6 +102,7 @@ declare namespace LocalJSX {
           * If provided(in index.html) → tries versioned script loading from config.json. If no version is found → automatically falls back to default player loading. If not provided → version management is skipped entirely and falls back to default player loading.
          */
         "codeFolderPath"?: string;
+        "commonAudioPath"?: string;
         /**
           * The height prop to pass to <lido-home>. Defaults to "75vh".
          */

@@ -59,6 +59,8 @@ export class LidoStandalone {
    */
   @Prop() codeFolderPath?: string;
 
+  @Prop() commonAudioPath?: string;
+
   /** Whether scripts are already injected (remote or fallback). */
   @State() scriptsInjected: boolean = false;
 
@@ -316,7 +318,7 @@ private doesFileExistSync(url: string): boolean {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
+    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
   }
 
   
