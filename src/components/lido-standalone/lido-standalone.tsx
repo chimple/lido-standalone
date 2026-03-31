@@ -281,7 +281,7 @@ private doesFileExistSync(url: string): boolean {
     }
 
     // If xmlPath is not explicitly provided, default to `index.xml` in baseUrl
-    if (!this.xmlPath) {
+    if (this.xmlPath) {
       if (this.baseUrl) {
         const cleanBase = this.baseUrl.replace(/\/+$/, '');
         this.xmlPath = `${cleanBase}/index.xml`;
