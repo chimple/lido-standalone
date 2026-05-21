@@ -53,6 +53,11 @@ export class LidoStandalone {
   @Prop() xmlData?: string;
 
   /**
+   *  To pass zip file directly to <lido-home> as its attribute.
+   */
+  @Prop() zipUrl?: string;
+
+  /**
     * If provided(in index.html) → tries versioned script loading from config.json.
     * If no version is found → automatically falls back to default player loading.
     * If not provided → version management is skipped entirely and falls back to default player loading.
@@ -316,7 +321,7 @@ private doesFileExistSync(url: string): boolean {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
+    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
   }
 
   
