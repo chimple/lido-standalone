@@ -1,6 +1,6 @@
 {
   "name": "lido-standalone",
-  "version": "0.0.0-beta-04",
+  "version": "0.0.0-beta-05",
   "description": "Lido standalone",
   "main": "dist/index.cjs.js",
   "module": "dist/index.js",
@@ -41,6 +41,6 @@
   },
   "license": "MIT",
   "dependencies": {
-    "lido-player": "^0.0.2-beta-04"
+    "lido-player": "^0.0.2-beta-05"
   }
 }
