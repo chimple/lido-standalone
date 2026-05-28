@@ -47,6 +47,9 @@ export class LidoStandalone {
   /** The height prop to pass to <lido-home>. Defaults to "75vh". */
   @Prop() height: string = '75vh';
 
+  /** The language prop to pass to <lido-home>. */
+  @Prop() lang?: string;
+
   /**
    * Optional prop for directly providing XML data instead of fetching.
    */
@@ -321,7 +324,7 @@ private doesFileExistSync(url: string): boolean {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
+    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} lang={this.lang} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
   }
 
   
