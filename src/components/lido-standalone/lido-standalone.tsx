@@ -326,7 +326,7 @@ private doesFileExistSync(url: string): boolean {
      * This ensures the custom elements are defined before usage.
      */
 
-    const lang = this.language || undefined;
+    const lang = this.language || 'en';
     return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} lang={lang} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
   }
 
