@@ -1,4 +1,4 @@
-import { Component, Prop, State, Watch, h } from '@stencil/core';
+import { Component, Element, Prop, State, Watch, h } from '@stencil/core';
 
 /**
  * <lido-standalone> usage example:
@@ -21,6 +21,8 @@ import { Component, Prop, State, Watch, h } from '@stencil/core';
   shadow: false,
 })
 export class LidoStandalone {
+  @Element() hostElement!: HTMLElement;
+
   /**
    * The public URL where the unzipped Lido code is hosted, e.g.
    * "https://example.com/path/to/lido-game".
@@ -48,7 +50,7 @@ export class LidoStandalone {
   @Prop() height: string = '75vh';
 
   /** The language prop to pass to <lido-home>. */
-  @Prop() lang?: string;
+  @Prop() language?: string;
 
   /**
    * Optional prop for directly providing XML data instead of fetching.
@@ -324,7 +326,8 @@ private doesFileExistSync(url: string): boolean {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} lang={this.lang} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
+    const lang = this.language || undefined;
+    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} lang={lang} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
   }
 
   
