@@ -92,6 +92,12 @@ export class LidoStandalone {
     this.fetchXmlData();
   }
 
+  // Re-apply inline XML whenever the host prop changes.
+  @Watch('xmlData')
+  onXmlDataChange() {
+    this.fetchXmlData();
+  }
+
   componentWillLoad() {
     // 1) Attempt to inject the Lido scripts from baseUrl
     this.injectLidoScripts();
