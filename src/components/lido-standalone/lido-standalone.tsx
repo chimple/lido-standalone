@@ -1,4 +1,4 @@
-import { Component, Prop, State, Watch, h } from '@stencil/core';
+import { Component, Element, Prop, State, Watch, h } from '@stencil/core';
 
 /**
  * <lido-standalone> usage example:
@@ -21,6 +21,8 @@ import { Component, Prop, State, Watch, h } from '@stencil/core';
   shadow: false,
 })
 export class LidoStandalone {
+  @Element() hostElement!: HTMLElement;
+
   /**
    * The public URL where the unzipped Lido code is hosted, e.g.
    * "https://example.com/path/to/lido-game".
@@ -47,10 +49,18 @@ export class LidoStandalone {
   /** The height prop to pass to <lido-home>. Defaults to "75vh". */
   @Prop() height: string = '75vh';
 
+  /** The language prop to pass to <lido-home>. */
+  @Prop() language?: string;
+
   /**
    * Optional prop for directly providing XML data instead of fetching.
    */
   @Prop() xmlData?: string;
+
+  /**
+   *  To pass zip file directly to <lido-home> as its attribute.
+   */
+  @Prop() zipUrl?: string;
 
   /**
     * If provided(in index.html) → tries versioned script loading from config.json.
@@ -79,6 +89,12 @@ export class LidoStandalone {
   // Re-fetch XML if the xmlPath changes
   @Watch('xmlPath')
   onXmlPathChange() {
+    this.fetchXmlData();
+  }
+
+  // Re-apply inline XML whenever the host prop changes.
+  @Watch('xmlData')
+  onXmlDataChange() {
     this.fetchXmlData();
   }
 
@@ -281,7 +297,6 @@ private doesFileExistSync(url: string): boolean {
     }
 
     // If xmlPath is not explicitly provided, default to `index.xml` in baseUrl
-    if (!this.xmlPath) {
       if (this.baseUrl) {
         const cleanBase = this.baseUrl.replace(/\/+$/, '');
         this.xmlPath = `${cleanBase}/index.xml`;
@@ -289,7 +304,6 @@ private doesFileExistSync(url: string): boolean {
       } else {
         return;
       }
-    }
 
     try {
       const xhr = new XMLHttpRequest();
@@ -318,7 +332,8 @@ private doesFileExistSync(url: string): boolean {
      * This ensures the custom elements are defined before usage.
      */
 
-    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath}></lido-home>;
+    const lang = this.language || 'en';
+    return <lido-home  common-audio-path={this.commonAudioPath} initial-index={this.initialIndex} canplay={this.canplay} height={this.height} lang={lang} xml-data={this.localXmlData} base-url={this.xmlBaseUrl} code-folder-path={this.codeFolderPath} zip-url={this.zipUrl}></lido-home>;
   }
 
   
