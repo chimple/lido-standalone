@@ -121,6 +121,7 @@ export async function prepareZipBundle(zipUrl: string): Promise<PreparedZipBundl
 }
 
 const ZIP_RESOLVER_KEY = '__lidoZipModuleResolver__';
+const ZIP_RUNTIME_KEY = '__lidoZipPlayerRuntime__';
 const REGISTRATION_NAMES = ['lido-home', 'lido-root', 'lido-container'];
 
 interface Token {
@@ -141,6 +142,13 @@ interface ResolverState {
   module: (fromPath: string, specifier: string) => string;
   resource: (fromPath: string, specifier: string) => string;
   resourceBase: () => string;
+}
+
+interface ZipRuntimeState {
+  fingerprint: string;
+  entryUrl: string;
+  resolver: ResolverState;
+  module: ResolverState['module'];
 }
 
 export interface LoadedZipPlayer {
@@ -439,8 +447,37 @@ function getRegistrationSnapshot(): Record<string, CustomElementConstructor | un
   return Object.fromEntries(REGISTRATION_NAMES.map(name => [name, customElements.get(name)]));
 }
 
+export const getExistingRegistrationNames = (
+  registry: Pick<CustomElementRegistry, 'get'> = customElements,
+): string[] => REGISTRATION_NAMES.filter(name => Boolean(registry.get(name)));
+
+export const canReuseRegisteredZipRuntime = (
+  registrations: string[],
+  existingFingerprint: string | undefined,
+  requestedFingerprint: string,
+): boolean =>
+  registrations.length > 0 && existingFingerprint === requestedFingerprint;
+
+export const getPreparedModuleUrl = (
+  moduleUrls: ReadonlyMap<string, string>,
+  path: string,
+): string => {
+  const url = moduleUrls.get(path);
+  if (!url) throw new Error(`ZIP player module is not prepared: ${path}`);
+  return url;
+};
+
 function hasNewRegistration(before: Record<string, CustomElementConstructor | undefined>): boolean {
   return REGISTRATION_NAMES.some(name => !before[name] && customElements.get(name));
+}
+
+async function fingerprintModules(moduleSources: Map<string, ModuleInfo>): Promise<string> {
+  const source = Array.from(moduleSources.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([path, info]) => `${path}\0${info.source}`)
+    .join('\0');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export async function loadPlayerFromPreparedZip(bundle: PreparedZipBundle): Promise<LoadedZipPlayer | undefined> {
@@ -454,9 +491,7 @@ export async function loadPlayerFromPreparedZip(bundle: PreparedZipBundle): Prom
     module: (fromPath, specifier) => {
       const path = resolveZipPath(fromPath, specifier);
       if (!path) return specifier;
-      const url = moduleUrls.get(path);
-      if (!url) throw new Error(`ZIP player module is not prepared: ${path}`);
-      return url;
+      return getPreparedModuleUrl(moduleUrls, path);
     },
     resource: (fromPath, specifier) => {
       const path = resolveResourcePath(fromPath, specifier);
@@ -469,15 +504,7 @@ export async function loadPlayerFromPreparedZip(bundle: PreparedZipBundle): Prom
   };
 
   const globalObject = globalThis as typeof globalThis & Record<string, unknown>;
-  if (REGISTRATION_NAMES.some(name => customElements.get(name))) {
-    throw new ZipPlayerLoadError(
-      'A Lido player has already registered custom elements; ZIP player cannot be loaded safely.',
-      true,
-    );
-  }
-
   const previousResolver = globalObject[ZIP_RESOLVER_KEY];
-  globalObject[ZIP_RESOLVER_KEY] = resolverState;
 
   const readModule = async (path: string): Promise<ModuleInfo> => {
     const existing = moduleSources.get(path);
@@ -593,8 +620,7 @@ export async function loadPlayerFromPreparedZip(bundle: PreparedZipBundle): Prom
       const target = resolveZipPath(info.path, specifier);
       if (!target) continue;
       if (!isJavaScriptPath(target)) continue;
-      const url = moduleUrls.get(target);
-      if (!url) throw new Error(`ZIP player module is not prepared: ${target}`);
+      const url = getPreparedModuleUrl(moduleUrls, target);
       replacements.push({ start: specifierToken.start, end: specifierToken.end, value: JSON.stringify(url) });
     }
 
@@ -667,6 +693,34 @@ export async function loadPlayerFromPreparedZip(bundle: PreparedZipBundle): Prom
   const beforeRegistration = getRegistrationSnapshot();
   try {
     await discover(bundle.playerEntry);
+    const fingerprint = await fingerprintModules(moduleSources);
+    const existingRegistrations = getExistingRegistrationNames();
+    const existingRuntime = globalObject[ZIP_RUNTIME_KEY] as ZipRuntimeState | undefined;
+    if (existingRegistrations.length > 0) {
+      if (canReuseRegisteredZipRuntime(existingRegistrations, existingRuntime?.fingerprint, fingerprint)) {
+        const reuseResolver: ResolverState = {
+          module: existingRuntime.module,
+          resource: resolverState.resource,
+          resourceBase: resolverState.resourceBase,
+        };
+        globalObject[ZIP_RESOLVER_KEY] = reuseResolver;
+        return {
+          entryUrl: existingRuntime.entryUrl,
+          dispose: () => {
+            if (globalObject[ZIP_RESOLVER_KEY] === reuseResolver) {
+              globalObject[ZIP_RESOLVER_KEY] = existingRuntime.resolver;
+            }
+          },
+        };
+      }
+
+      throw new ZipPlayerLoadError(
+        'A Lido player has already registered custom elements; ZIP player cannot be loaded safely.',
+        true,
+      );
+    }
+
+    globalObject[ZIP_RESOLVER_KEY] = resolverState;
     const entryUrl = await build(bundle.playerEntry);
     for (const path of moduleSources.keys()) {
       if (!moduleUrls.has(path)) await build(path);
@@ -678,15 +732,18 @@ export async function loadPlayerFromPreparedZip(bundle: PreparedZipBundle): Prom
       new Promise((_, reject) => setTimeout(() => reject(new Error('ZIP player custom-element registration timed out')), 10000)),
     ]);
 
+    globalObject[ZIP_RUNTIME_KEY] = {
+      fingerprint,
+      entryUrl,
+      resolver: resolverState,
+      module: resolverState.module,
+    };
+
     return {
       entryUrl,
       dispose: () => {
-        for (const url of moduleUrls.values()) URL.revokeObjectURL(url);
-        moduleUrls.clear();
-        if (globalObject[ZIP_RESOLVER_KEY] === resolverState) {
-          if (previousResolver === undefined) delete globalObject[ZIP_RESOLVER_KEY];
-          else globalObject[ZIP_RESOLVER_KEY] = previousResolver;
-        }
+        // Custom elements cannot be unregistered. Keep the successfully loaded
+        // runtime available for later lessons in this document.
       },
     };
   } catch (error) {
