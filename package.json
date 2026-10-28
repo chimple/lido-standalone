@@ -11,7 +11,7 @@
   "exports": {
     ".": {
       "import": "./dist/lido-standalone/lido-standalone.esm.js",
-      "require": "./dist/lido-standalone/lido-standalone.cjs.js"
+      "require": "./dist/index.cjs.js"
     },
     "./my-component": {
       "import": "./dist/components/my-component.js",
