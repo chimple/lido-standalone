@@ -1,3 +1,4 @@
+import 'lido-player/styles.css';
 import { createRouter } from 'stencil-router-v2';
 
 export { Components, JSX } from './components';
