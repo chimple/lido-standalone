@@ -10,7 +10,7 @@
   "unpkg": "dist/lido-standalone/lido-standalone.esm.js",
   "exports": {
     ".": {
-      "import": "./dist/lido-standalone/lido-standalone.esm.js",
+      "import": "./lido-standalone.esm.js",
       "require": "./dist/index.cjs.js"
     },
     "./my-component": {
@@ -18,7 +18,7 @@
       "types": "./dist/components/my-component.d.ts"
     },
     "./loader": {
-      "import": "./loader/index.js",
+      "import": "./lido-standalone-loader.js",
       "require": "./loader/index.cjs.js",
       "types": "./loader/index.d.ts"
     }
